@@ -1,39 +1,179 @@
 <html>
-    <head>
 
-    </head>
-    <body>
-        <input class="send" placeholder="Message to send..."></input>
-        <button class="sendbtn">Send</button>
-        <div class="msgs">
+<head>
+    <script src="utils/useful.js">
+    </script>
+</head>
+
+<body>
+    <div data-screen="home">
+        <h1> Game engine v1</h1>
+        <h2>Current players</h2>
+        <div class="currentPlayers">
 
         </div>
-        <script>
-            let ws = new WebSocket('ws://'+location.hostname+":8082");
-            let uid="";
-            ws.addEventListener("message",(msg)=>{
-                try{
-                    let data=JSON.parse(msg.data);
-                    switch (data.type){
-                        case "uid":
-                            uid=data.data;
-                            break;
-                        case "msg":
-                            let p=document.createElement("p");
-                            p.innerText=`${data.sender}:${data.data}`;
-                            document.querySelector(".msgs").appendChild(p);
-                            break;
+        <h2>Current games</h2>
+        <div class="currentGames">
+
+        </div>
+        <h2>Start a new game</h2>
+        <div class="newGames">
+
+        </div>
+    </div>
+    <div data-screen="join" style="display:none">
+        <h1>Lobby</h1>
+        <h2>Game name: <span class="gameName"></span></h2>
+        <h2>Players:</h2>
+        <ul class="playerlist">
+
+        </ul>
+        <button onclick="startGame()">Start the game</button>
+    </div>
+    <div data-screen="game" style="display:none">
+
+    </div>
+    <script>
+        var cuid;//current user id
+
+
+
+        //Load existing games.
+        let ws = new WebSocket('ws://' + location.hostname + ":8082");
+        ws.addEventListener("message", (msg) => {
+            try {
+                let data = JSON.parse(msg.data);
+                let oldEl;
+                switch (data.type) {
+                    case "uid": {
+                        //recieve a UID
+                        cuid = data;
+                        //tell everyone i exist
+                        ws.send(JSON.stringify({
+                            type: "newGamer",
+                            data: cuid
+                        }));
                     }
-                }catch (e){
-                    console.log("invalid message sent");
+                        break;
+                    case "newGamer": {
+                        let oldEl = document.querySelector(`.currentPlayers>p[data-uid="${data.data}"]`);
+                        if (oldEl) oldEl.remove();
+                        document.querySelector(".currentPlayers").appendChild(htmlwrap(`<p data-uid=${data.data}>${data.data}</p>`));
+                    }
+                        break;
+                    case "newGame": {
+                        //display the game in the lobby
+                        let oldEl = document.querySelector(`.currentGames>button[data-gid="${data.data}"]`);
+                        if (oldEl) oldEl.remove();
+                        let btn = htmlwrap(`<button data-gid=${data.data}>${data.data}</button>`);
+                        btn.addEventListener("click", () => {
+                            joinGame(data.data, data.type);
+                        })
+                        document.querySelector(".currentGames").appendChild(btn);
+                    }
+                        break;
+                    case "joinGame": {
+                        //someone is joining a game
+                        // is it my game?
+                        if (data.gid == currentGame.gid) {
+                            //Add to the notice on the lobby
+                            let cun = document.querySelector(`[data-screen="join"] .playerlist>li[data-uid='${data.uid}']`);
+                            if (cun) cun.remove();
+                            document.querySelector(`[data-screen="join"] .playerlist`).appendChild(htmlwrap(`<li data-uid=${data.uid}>${data.uid}</li>`));
+                        }
+                    }
+                        break;
+                    case "gameDataUpdate": {
+                        if (currentGame && currentGame.gid == data.gid) {
+                            currentGame.game.render(data.state);
+                        }
+                    }
+                        break;
+                    case "startGame": {
+                        //start the game!
+                        if (data.gid == currentGame.gid && data.ulist.indexOf(cuid) != -1) {
+                            //start the game!!!!
+                            currentGame.game = new games[currentGame.type].fn();
+                            currentGame.game.start(document.querySelector("[data-screen='game']"), cuid, data.ulist);
+                            document.querySelector("[data-screen='game']").style.display = "block";
+                        }
+                    }
+                        break;
+                    case "gameEnd": {
+                        //remove game from list
+                        let oldEl = document.querySelector(`.currentGames>button[data-gid="${data.gid}"]`);
+                        if (oldEl) oldEl.remove();
+                        //alert game has ended
+                        if (data.gid == currentGame.gid) {
+                            alert(`Game over! Winner was ${data.winner}.`);
+                            document.querySelector("[data-screen='game']").style.display = "none";
+                            document.querySelector("[data-screen='home']").style.display = "block";
+                        }
+                    }
+                        break;
                 }
-            })
-            ws.addEventListener("open",()=>{
-                document.querySelector(".sendbtn").addEventListener("click",()=>{
-                    ws.send(JSON.stringify({type:"msg",data:document.querySelector(".send").value,sender:uid}));
-                    document.querySelector(".send").value="";
-                })
-            })
-        </script>
-    </body>
+            } catch (e) {
+                console.log("invalid message sent");
+            }
+        })
+
+
+        var games = {};
+        function renderPlayableGame(name) {
+            let oldGameDiv = document.querySelector(`.newGames>div[data-id="${name}"]`);
+            if (oldGameDiv) oldGameDiv.remove();
+            let newGameDiv = htmlwrap(`<div data-id="${name}">
+                    <h3>${games[name].meta.prettyName || name}</h3>
+                </div>`);
+            newGameDiv.addEventListener("click", () => { launchGame(name) });
+            document.querySelector(".newGames").appendChild(newGameDiv);
+        }
+        function addGame(name, meta, fn) {
+            games[name] = {
+                meta: meta || {},
+                fn: fn
+            }
+            renderPlayableGame(name);
+        }
+        function launchGame(name) {
+            //hide everything else
+            document.querySelector("[data-screen='home']").style.display = "none";
+            //show the lobby
+            document.querySelector("[data-screen='join']").style.display = "block";
+            // register an active game with the server
+            // Generate a GID
+            currentGame = { gid: guid() };
+            ws.send(JSON.stringify({ type: "newGame", data: { gid: currentGame.gid, type: name } }));
+        }
+        function joinGame(name, type) {
+            //set my game id to that game id
+            currentGame = { gid: name, type: type };
+            //send a join request
+            ws.send(JSON.stringify({ type: "joinGame", data: { gid: currentGame.gid, uid: cuid } }));
+        }
+
+        function startGame() {
+            //send a startingGame message
+            let userList = [];
+            let userTags = document.querySelectorAll("[data-screen='join'] ul li");
+            for (let i = 0; i < userTags.length; i++) {
+                userList.push(userTags[i].innerHTML);
+            }
+            ws.send(JSON.stringify({ type: "startingGame", data: { gid: currentGame.gid, ulist: userList, hostId: cuid } }));
+            //then start the game
+        }
+
+        function win(uid, scores) {
+            //Fire a gameEnd on the ws
+            ws.send(JSON.stringify({ type: "gameEnd", data: { gid: currentGame.gid, winner: uid, scores: scores } }));
+        }
+        function transmit(state) {
+            ws.send(JSON.stringify({ type: "gameDataUpdate", data: { gid: currentGame.gid, state: state } }));
+        }
+    </script>
+    <script src="games/stub.js">
+
+    </script>
+</body>
+
 </html>

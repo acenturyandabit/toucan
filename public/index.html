@@ -47,12 +47,21 @@
                 switch (data.type) {
                     case "uid": {
                         //recieve a UID
-                        cuid = data;
-                        //tell everyone i exist
+                        cuid = data.data;
+                        //ask for what exists
+                        ws.send(JSON.stringify({
+                            type: "request"
+                        }));
+                    }
+                        break;
+                    case "request": {
+                        //broadcast info about me and my games
                         ws.send(JSON.stringify({
                             type: "newGamer",
                             data: cuid
                         }));
+                        if (currentGame && currentGame.host == cuid) ws.send(JSON.stringify({ type: "newGame", gid: currentGame.gid, gametype: currentGame.type }));
+                        if (currentGame) ws.send(JSON.stringify({ type: "joinGame", gid: currentGame.gid, gametype: currentGame.type, uid: cuid }));
                     }
                         break;
                     case "newGamer": {
@@ -63,13 +72,15 @@
                         break;
                     case "newGame": {
                         //display the game in the lobby
-                        let oldEl = document.querySelector(`.currentGames>button[data-gid="${data.data}"]`);
+                        let oldEl = document.querySelector(`.currentGames>button[data-gid="${data.gid}"]`);
                         if (oldEl) oldEl.remove();
-                        let btn = htmlwrap(`<button data-gid=${data.data}>${data.data}</button>`);
+                        let btn = htmlwrap(`<button data-gid=${data.gid}>${data.gid}</button>`);
                         btn.addEventListener("click", () => {
-                            joinGame(data.data, data.type);
+                            joinGame(data.gid, data.gametype);
                         })
                         document.querySelector(".currentGames").appendChild(btn);
+                        //join my own game
+                        if (data.gid == currentGame.gid) ws.send(JSON.stringify({ type: "joinGame", gid: currentGame.gid, uid: cuid }));
                     }
                         break;
                     case "joinGame": {
@@ -79,13 +90,20 @@
                             //Add to the notice on the lobby
                             let cun = document.querySelector(`[data-screen="join"] .playerlist>li[data-uid='${data.uid}']`);
                             if (cun) cun.remove();
+                            document.querySelector(`[data-screen="join"] .gameName`).innerHTML = currentGame.gid;
                             document.querySelector(`[data-screen="join"] .playerlist`).appendChild(htmlwrap(`<li data-uid=${data.uid}>${data.uid}</li>`));
+                            document.querySelector("[data-screen='home']").style.display = "none";
+                            document.querySelector("[data-screen='join']").style.display = "block";
+                        } if (data.uid == cuid && data.request) {
+                            ws.send(JSON.stringify({
+                                type: "request"
+                            }));
                         }
                     }
                         break;
                     case "gameDataUpdate": {
                         if (currentGame && currentGame.gid == data.gid) {
-                            currentGame.game.render(data.state);
+                            currentGame.game.recieve(data.state);
                         }
                     }
                         break;
@@ -95,6 +113,7 @@
                             //start the game!!!!
                             currentGame.game = new games[currentGame.type].fn();
                             currentGame.game.start(document.querySelector("[data-screen='game']"), cuid, data.ulist);
+                            document.querySelector("[data-screen='join']").style.display = "none";
                             document.querySelector("[data-screen='game']").style.display = "block";
                         }
                     }
@@ -128,7 +147,7 @@
             newGameDiv.addEventListener("click", () => { launchGame(name) });
             document.querySelector(".newGames").appendChild(newGameDiv);
         }
-        function addGame(name, meta, fn) {
+        function registerGame(name, meta, fn) {
             games[name] = {
                 meta: meta || {},
                 fn: fn
@@ -142,14 +161,14 @@
             document.querySelector("[data-screen='join']").style.display = "block";
             // register an active game with the server
             // Generate a GID
-            currentGame = { gid: guid() };
-            ws.send(JSON.stringify({ type: "newGame", data: { gid: currentGame.gid, type: name } }));
+            currentGame = { gid: guid(), type: name, host: cuid };
+            ws.send(JSON.stringify({ type: "newGame", gid: currentGame.gid, gametype: currentGame.type }));
         }
         function joinGame(name, type) {
             //set my game id to that game id
             currentGame = { gid: name, type: type };
             //send a join request
-            ws.send(JSON.stringify({ type: "joinGame", data: { gid: currentGame.gid, uid: cuid } }));
+            ws.send(JSON.stringify({ type: "joinGame", gid: currentGame.gid, uid: cuid , request:true}));
         }
 
         function startGame() {
@@ -159,19 +178,19 @@
             for (let i = 0; i < userTags.length; i++) {
                 userList.push(userTags[i].innerHTML);
             }
-            ws.send(JSON.stringify({ type: "startingGame", data: { gid: currentGame.gid, ulist: userList, hostId: cuid } }));
+            ws.send(JSON.stringify({ type: "startGame", gid: currentGame.gid, ulist: userList, hostId: cuid }));
             //then start the game
         }
 
         function win(uid, scores) {
             //Fire a gameEnd on the ws
-            ws.send(JSON.stringify({ type: "gameEnd", data: { gid: currentGame.gid, winner: uid, scores: scores } }));
+            ws.send(JSON.stringify({ type: "gameEnd", gid: currentGame.gid, winner: uid, scores: scores }));
         }
         function transmit(state) {
-            ws.send(JSON.stringify({ type: "gameDataUpdate", data: { gid: currentGame.gid, state: state } }));
+            ws.send(JSON.stringify({ type: "gameDataUpdate", gid: currentGame.gid, state: state }));
         }
     </script>
-    <script src="games/stub.js">
+    <script src="games/template.js">
 
     </script>
 </body>

@@ -1,9 +1,9 @@
 const express = require("express");
 const ws = require('ws');
-
+const server = require('http').createServer();
 var app = express();
 
-var wss = new ws.Server({port:8082 });
+var wss = new ws.Server({server:server});
 var clients = {};
 var guid = function () {
     let chars = 'qwertyuiopasdfghjklzxcvbnm';
@@ -30,4 +30,5 @@ wss.on("connection", (ws) => {
 
 
 app.use(express.static('public'));
-app.listen(8081);
+server.on("request",app);
+server.listen(process.env.PORT || 8081);

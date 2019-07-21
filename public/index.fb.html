@@ -1,26 +1,13 @@
 <html>
 
 <head>
-    <script src="utils/useful.js"></script>
-    <script src="utils/xpass.js"></script>
-    <script src="utils/capacitor.js"></script>
-    <style>
-        .newGames {
-            display: flex;
-            flex-direction: row;
-        }
-        .newGames>div{
-            margin: 3px;
-            background:lightblue;
-            padding: 3px;
-        }
-    </style>
+    <script src="utils/useful.js">
+    </script>
 </head>
 
 <body>
     <div data-screen="home">
-        <h1> Game engine v1.1</h1>
-        <p>Your username:</p><input class="prettyName" placeholder="Type something witty."></input>
+        <h1> Game engine v1</h1>
         <h2>Current players</h2>
         <div class="currentPlayers">
 
@@ -47,23 +34,12 @@
 
     </div>
     <script>
-        //fill prettyname with random username
-        document.querySelector(".prettyName").value = xpass();
-        var prettyNameCapacitor = new capacitor(400, -1, () => {
-            if (document.querySelector(".prettyName").value) ws.send(JSON.stringify({
-                type: "newGamer",
-                uid: cuid,
-                prettyName: document.querySelector(".prettyName").value
-            }));
-        })
-
-        document.querySelector(".prettyName").addEventListener("input", () => { prettyNameCapacitor.submit() });
         var cuid;//current user id
 
 
         var currentGame;
         //Load existing games.
-        let ws = new WebSocket('ws://' + location.host);
+        let ws = new WebSocket('ws://' + location.hostname + ":8082");
         ws.addEventListener("message", (msg) => {
             try {
                 let data = JSON.parse(msg.data);
@@ -82,17 +58,16 @@
                         //broadcast info about me and my games
                         ws.send(JSON.stringify({
                             type: "newGamer",
-                            uid: cuid,
-                            prettyName: document.querySelector(".prettyName").value
+                            data: cuid
                         }));
                         if (currentGame && currentGame.host == cuid) ws.send(JSON.stringify({ type: "newGame", gid: currentGame.gid, gametype: currentGame.type }));
                         if (currentGame) ws.send(JSON.stringify({ type: "joinGame", gid: currentGame.gid, gametype: currentGame.type, uid: cuid }));
                     }
                         break;
                     case "newGamer": {
-                        let oldEl = document.querySelector(`.currentPlayers>p[data-uid="${data.uid}"]`);
+                        let oldEl = document.querySelector(`.currentPlayers>p[data-uid="${data.data}"]`);
                         if (oldEl) oldEl.remove();
-                        document.querySelector(".currentPlayers").appendChild(htmlwrap(`<p data-uid=${data.uid}>${data.prettyName}</p>`));
+                        document.querySelector(".currentPlayers").appendChild(htmlwrap(`<p data-uid=${data.data}>${data.data}</p>`));
                     }
                         break;
                     case "newGame": {
@@ -137,7 +112,7 @@
                         if (data.gid == currentGame.gid && data.ulist.indexOf(cuid) != -1) {
                             //start the game!!!!
                             currentGame.game = new games[currentGame.type].fn();
-                            currentGame.game.start(document.querySelector("[data-screen='game']"), cuid, data.ulist, cuid == data.hostId);
+                            currentGame.game.start(document.querySelector("[data-screen='game']"), cuid, data.ulist,cuid==data.hostId);
                             document.querySelector("[data-screen='join']").style.display = "none";
                             document.querySelector("[data-screen='game']").style.display = "block";
                         }
@@ -193,7 +168,7 @@
             //set my game id to that game id
             currentGame = { gid: name, type: type };
             //send a join request
-            ws.send(JSON.stringify({ type: "joinGame", gid: currentGame.gid, uid: cuid, request: true }));
+            ws.send(JSON.stringify({ type: "joinGame", gid: currentGame.gid, uid: cuid , request:true}));
         }
 
         function startGame() {

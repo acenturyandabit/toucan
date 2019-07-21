@@ -1,0 +1,39 @@
+<html>
+    <head>
+
+    </head>
+    <body>
+        <input class="send" placeholder="Message to send..."></input>
+        <button class="sendbtn">Send</button>
+        <div class="msgs">
+
+        </div>
+        <script>
+            let ws = new WebSocket('ws://'+location.hostname+":8082");
+            let uid="";
+            ws.addEventListener("message",(msg)=>{
+                try{
+                    let data=JSON.parse(msg.data);
+                    switch (data.type){
+                        case "uid":
+                            uid=data.data;
+                            break;
+                        case "msg":
+                            let p=document.createElement("p");
+                            p.innerText=`${data.sender}:${data.data}`;
+                            document.querySelector(".msgs").appendChild(p);
+                            break;
+                    }
+                }catch (e){
+                    console.log("invalid message sent");
+                }
+            })
+            ws.addEventListener("open",()=>{
+                document.querySelector(".sendbtn").addEventListener("click",()=>{
+                    ws.send(JSON.stringify({type:"msg",data:document.querySelector(".send").value,sender:uid}));
+                    document.querySelector(".send").value="";
+                })
+            })
+        </script>
+    </body>
+</html>

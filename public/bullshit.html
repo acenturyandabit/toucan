@@ -1,0 +1,234 @@
+<html>
+
+<head>
+    <style>
+        .hand .selected {
+            background: green;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="lobby">
+        <h1>
+            Active players:
+        </h1>
+    </div>
+    <div class="game" style="display:none">
+        <fieldset class="inTurnCommands">
+            <div class="hand">
+
+            </div>
+            <p>Play as:<input class="bsAs"></input></p>
+            <button class="pcard">Play card</button>
+            <button class="cbs">Call BS</button>
+        </fieldset>
+        <div class="status">
+            <p>Opponent ID:</p>
+            <p>Current top card: <span class="ctcd"></span></p>
+        </div>
+    </div>
+    <script>
+        let ws = new WebSocket('ws://' + location.hostname + ":8082");
+        let uid = "";
+        function _deck() {
+            this.cards = [];
+            for (let i = 0; i < 52; i++)this.cards.push(i);
+            this.shuffle = function () {
+                for (let i = 0; i < this.cards.length; i++) {
+                    let i2 = Math.floor(Math.random() * (this.cards.length - i));
+                    let temp = this.cards[i2];
+                    this.cards[i2] = this.cards[i];
+                    this.cards[i] = temp;
+                }
+            }
+            this.shuffle();
+            this.draw = function (count) {
+                if (count) return this.cards.splice(0, count);
+                else return this.cards.pop();
+            }
+            this.cid = function (card) {
+                let suits = ["H", "C", "D", "S"];
+                let nos = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "J", "Q", "K"];
+                return suits[card % 4] + nos[Math.floor(card / 4)];
+            }
+            this.prettyPrint = function (card) {
+                let suits = ["Hearts", "Clubs", "Diamonds", "Spades"];
+                let nos = ["Ace ", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Jack", "Queen", "King"];
+                return nos[Math.floor(card / 4)] + " of " + suits[card % 4];
+            }
+            this.fromCid = function (str) {
+                let suits = ["H", "C", "D", "S"];
+                let nos = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "J", "Q", "K"];
+                let suit = suits.indexOf(str[0]);
+                let no = nos.indexOf(str[1]);
+                return suit + no*4;
+            }
+        }
+        let deck = new _deck();
+        function _game() {
+            let me = this;
+            this.reset = function (player1, player2) {
+                // reset my internal parameters
+                me.turn = ((Math.random() > 0.5) + 0);//1 or 0
+                me.players = [player1, player2];
+                me.deck = new _deck();
+                me.playerHands = [me.deck.draw(5), me.deck.draw(5)];
+                me.topcard = me.deck.draw();
+                me.realtopcard = me.topcard;
+            }
+            this.play = function (p, data) {
+                let c = data.c;
+                let as = data.as;
+                //check that player actually has the card they're trying to play
+                let playerIndex = me.players.indexOf(p);
+                if (!me.playerHands[playerIndex].includes(Number(c))) {
+                    return;//invalid move
+                }
+                me.playerHands[playerIndex].splice(me.playerHands[playerIndex].indexOf(c), 1);
+                me.topcard = as;
+                me.realtopcard = c;
+            }
+            this.callBS = function (pfrom) {
+                let playerIndex = me.players.indexOf(pfrom);
+                if (me.topcard == me.realtopcard) {
+                    me.playerHands[playerIndex].push(me.deck.draw());
+                    //penalise pfrom
+                } else {
+                    //penalise other player
+                    me.playerHands[(!playerIndex) + 0].push(me.deck.draw());
+                }
+            }
+        }
+        var game = new _game();
+        var isHost = false;
+        ws.addEventListener("message", (msg) => {
+            try {
+                let data = JSON.parse(msg.data);
+                switch (data.type) {
+                    case "playerOnline":
+                        if (data.game == "bullshit" && data.uid != uid) {
+                            //add the button if it does not exist
+                            if (!document.querySelector(`.lobby [data-uid=${data.uid}]`)) {
+                                let playerBtn = document.createElement("button");
+                                playerBtn.innerText = data.uid;
+                                playerBtn.dataset.uid = data.uid;
+                                playerBtn.addEventListener("click", (e) => {
+                                    let otheruid = e.target.innerText;
+                                    //send a challenge request to the server
+                                    ws.send(JSON.stringify({
+                                        type: "challenge",
+                                        uid: uid
+                                    }));
+                                    isHost = true;
+                                    //prepare the game, prepare to manage the game
+                                    document.querySelector(".lobby").style.display = "none";
+                                    document.querySelector(".game").style.display = "block";
+                                    //deal cards to both players
+                                    game.reset(uid, data.uid);
+                                    ws.send(JSON.stringify({
+                                        type: "statusUpdate",
+                                        status: JSON.parse(JSON.stringify(game))
+                                    }));
+                                });
+                                document.querySelector(".lobby").appendChild(playerBtn);
+                            }
+                        }
+                        break;
+                    case "statusUpdate":
+                        //render the status update
+                        document.querySelector(".ctcd").innerHTML = deck.prettyPrint(data.status.topcard);
+                        //render the current hand
+                        document.querySelector(".hand").innerHTML = "";
+                        let thisPlayerIndex = data.status.players.indexOf(uid);
+                        data.status.playerHands[thisPlayerIndex].forEach((v) => {
+                            let b = document.createElement("button");
+                            b.innerHTML = deck.prettyPrint(v);
+                            b.dataset.card = v;
+                            document.querySelector(".hand").appendChild(b);
+                            b.addEventListener("click", () => {
+                                let sel = document.querySelector(".hand .selected");
+                                if (sel) sel.classList.remove("selected");
+                                b.classList.add("selected");
+                                document.querySelector(".bsAs").value = deck.cid(b.dataset.card);
+                            });
+                        });
+                        //if not my turn, disable buttons
+                        if (data.status.players[data.status.turn] != uid) {
+                            document.querySelector(".inTurnCommands").disabled = true;
+                        } else {
+                            document.querySelector(".inTurnCommands").disabled = false;
+                        }
+                        break;
+                    case "move":
+                        //process the move
+                        if (isHost) {
+                            if (game[data.movetype]) {
+                                game[data.movetype](data.uid, data.data);
+                            }
+                            //change turn
+                            game.turn = !game.turn + 0;
+                            //send status update
+                            ws.send(JSON.stringify({
+                                type: "statusUpdate",
+                                status: JSON.parse(JSON.stringify(game))
+                            }));
+                        }
+                        break;
+                    case "challenge":
+                        //ready game
+                        document.querySelector(".lobby").style.display = "none";
+                        document.querySelector(".game").style.display = "block";
+                        //wait for further updates
+                        break;
+                    case "uid":
+                        uid = data.data;
+                        ws.send(JSON.stringify({
+                            type: "requestPlayers",
+                            game: "bullshit"
+                        }))
+                    case "requestPlayers":
+                        ws.send(JSON.stringify({
+                            type: "playerOnline",
+                            game: "bullshit",
+                            uid: uid
+                        }));
+                        break;
+                    case "msg":
+                        let p = document.createElement("p");
+                        p.innerText = `${data.sender}:${data.data}`;
+                        document.querySelector(".msgs").appendChild(p);
+                        break;
+                }
+            } catch (e) {
+                console.log("invalid message sent");
+            }
+        })
+        ws.addEventListener("open", () => {
+            //button handlers
+            document.querySelector(".pcard").addEventListener("click", () => {
+                ws.send(JSON.stringify({
+                    type: "move",
+                    movetype: "play",
+                    uid: uid,
+                    data: {
+                        c: document.querySelector(".hand .selected").dataset.card,
+                        as: deck.fromCid(document.querySelector(".bsAs").value)
+                    }
+                }))
+            });
+            //button handlers
+            document.querySelector(".cbs").addEventListener("click", () => {
+                ws.send(JSON.stringify({
+                    type: "move",
+                    movetype: "callBS",
+                    uid: uid
+                }))
+            });
+        })
+
+
+    </script>
+</body>
+
+</html>

@@ -37,7 +37,7 @@
         var cuid;//current user id
 
 
-
+        var currentGame;
         //Load existing games.
         let ws = new WebSocket('ws://' + location.hostname + ":8082");
         ws.addEventListener("message", (msg) => {
@@ -80,13 +80,13 @@
                         })
                         document.querySelector(".currentGames").appendChild(btn);
                         //join my own game
-                        if (data.gid == currentGame.gid) ws.send(JSON.stringify({ type: "joinGame", gid: currentGame.gid, uid: cuid }));
+                        if (currentGame && data.gid == currentGame.gid) ws.send(JSON.stringify({ type: "joinGame", gid: currentGame.gid, uid: cuid }));
                     }
                         break;
                     case "joinGame": {
                         //someone is joining a game
                         // is it my game?
-                        if (data.gid == currentGame.gid) {
+                        if (currentGame && data.gid == currentGame.gid) {
                             //Add to the notice on the lobby
                             let cun = document.querySelector(`[data-screen="join"] .playerlist>li[data-uid='${data.uid}']`);
                             if (cun) cun.remove();
@@ -112,7 +112,7 @@
                         if (data.gid == currentGame.gid && data.ulist.indexOf(cuid) != -1) {
                             //start the game!!!!
                             currentGame.game = new games[currentGame.type].fn();
-                            currentGame.game.start(document.querySelector("[data-screen='game']"), cuid, data.ulist);
+                            currentGame.game.start(document.querySelector("[data-screen='game']"), cuid, data.ulist,cuid==data.hostId);
                             document.querySelector("[data-screen='join']").style.display = "none";
                             document.querySelector("[data-screen='game']").style.display = "block";
                         }
@@ -190,9 +190,8 @@
             ws.send(JSON.stringify({ type: "gameDataUpdate", gid: currentGame.gid, state: state }));
         }
     </script>
-    <script src="games/template.js">
-
-    </script>
+    <script src="games/template.js"></script>
+    <script src="games/tictactoe.js"></script>
 </body>
 
 </html>

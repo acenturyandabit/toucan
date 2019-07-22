@@ -4,15 +4,20 @@ registerGame("template", undefined, function () {
     let players = [];
 
     let id;
-    let _div;
-    this.start = function (div, _id, _players) {
-        _div = div;
+    let div;
+    this.start = function (_div, _id, _players) {
+        
+        div = _div;
         players = _players;
+        id = players.indexOf(_id);
+        
         state.turn = 0;
         state.score = [];
+        
         for (let i = 0; i < players.length; i++) state.score[i] = 0;
+             
         let preinnerHTML = "";
-        id=players.indexOf(_id);
+        
         preinnerHTML = `
         <h2>Template Game</h2>
         
@@ -48,14 +53,15 @@ registerGame("template", undefined, function () {
         </fieldset>
         
         `;
-        _div.innerHTML = preinnerHTML;
-        _div.querySelector("#btn_GetScore").addEventListener("click", () => {
+        
+        div.innerHTML = preinnerHTML;
+        div.querySelector("#btn_GetScore").addEventListener("click", () => {
 
             state.score[id]++;
 
         });
 
-        _div.querySelector("#btn_EndTurn").addEventListener("click", () => {
+        div.querySelector("#btn_EndTurn").addEventListener("click", () => {
 
             state.turn = (state.turn + 1) % players.length;
             transmit(state);
@@ -71,17 +77,17 @@ registerGame("template", undefined, function () {
 
         state = _state;
 
-        for (let i = 0; i < players.length; i++) _div.querySelector("#td_Player" + i + "Score").innerHTML = state.score[i];
+        for (let i = 0; i < players.length; i++) div.querySelector("#td_Player" + i + "Score").innerHTML = state.score[i];
 
         if (state.turn == id) {
 
-            _div.querySelector("#txt_Turn").innerHTML = "Your turn!";
-            _div.querySelector("#group_Actions").disabled = false;
+            div.querySelector("#txt_Turn").innerHTML = "Your turn!";
+            div.querySelector("#group_Actions").disabled = false;
 
         } else {
 
-            _div.querySelector("#txt_Turn").innerHTML = players[state.turn] + " to play.";
-            _div.querySelector("#group_Actions").disabled = true;
+            div.querySelector("#txt_Turn").innerHTML = players[state.turn] + " to play.";
+            div.querySelector("#group_Actions").disabled = true;
 
         }
     }

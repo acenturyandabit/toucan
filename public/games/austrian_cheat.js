@@ -92,9 +92,10 @@ registerGame("austrian", undefined, function () {
         <h4 id='txt_Top'></h4>
         <h4 id='txt_Last'></h4>
         
-        <fieldset id='group_Actions'>
+        <h4>Your cards:</h4>
+        <select id='select_Cards'></select>
         
-            <select id='select_Cards'></select>
+        <fieldset id='group_Actions'>
             
             <button id='btn_Add'>Select</button>
             
@@ -142,8 +143,8 @@ registerGame("austrian", undefined, function () {
             state.count = div.querySelector("#selectedCards").children.length;
             state.totalcount += state.count;
             
-            if (state.top == "") state.top = prompt("Claim the card/s to be (2 -> K):");
-            while ("234567890JQK".indexOf(state.top) == -1) state.top = prompt("Invalid card. Claim the card/s to be (2 -> K):");
+            if (state.top == "") state.top = prompt("Claim the card/s to be (2 -> K):").toUpperCase();
+            while ("234567890JQK".indexOf(state.top) == -1) state.top = prompt("Invalid card. Claim the card/s to be (2 -> K):").toUpperCase();
             if ("234567890JQK".indexOf(state.top) == -1) state.top = div.querySelector("#selectedCards").children[0].innerHTML;
             if ("234567890JQK".indexOf(state.top) == -1) state.top = "234567890JQK"[Math.floor(Math.random() * 12)];
                                                         
